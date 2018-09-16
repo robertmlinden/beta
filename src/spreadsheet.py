@@ -7,88 +7,87 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.widget import Widget
 
+from kivy.config import Config
+Config.set('input', 'mouse', 'mouse,multitouch_on_demand')
+
 import operator
 
 class Spreadsheet(Widget):
-    class _CellView(TextInput):
-        def __init__(self, row = None, col = None, *args, **kw):
-            self.__row = row
-            self.__col = col
-            super().__init__(*args, **kw)
-
-        def _feed_cell_manager(self, cell_manager):
-            self.__cell_manager = cell_manager
-
-        @property
-        def coordinates(self):
-            return self.__row, self.__col
-
-        def config(self, **options):
-            for key, value in options.items():
-                self.__setattr__(key, value)
-
-        def on_touch_down(self, touch):
-            return self.__cell_manager.on_touch_down(touch)
-
-    class _Cell(object):
-        def __init__(self, row, col):
-            self.row = row
-            self.col = col
-
-            self.__options = {}
-            self.__init_options()
-
-            self.__formula = ''
-
-            self.__mode = 'computed'
-
-            self.__computed = str(row*2**5+col)
-
-        def __init_options(self):
-            pass
-
-        @property
-        def coordinates(self):
-            return (self.row, self.col)
-
-        @property
-        def index(self):
-            return utils.get_cell_index(self.row, self.col)
-
-        @property
-        def config(self):
-            return self.__options
-        
-        @config.setter
-        def config(self, **options):
-            self.__options.update(options)
-            return self.__options
-        
-        @property
-        def formula(self):
-            return self.__formula_value
-
-        @formula.setter
-        def formula(self, value):
-            self.__formula = value
-
-        @property
-        def mode(self):
-            return self.__mode
-
-        @mode.setter
-        def mode(self, value):
-            self.__mode = value
-
-        @property
-        def display(self):
-            return self.formula if self.mode == 'formula' else self.computed
-
-        @property
-        def computed(self):
-            return self.__computed
-
     class _CellManager(object):
+        class _CellView(TextInput):
+            def __init__(self, row = None, col = None, *args, **kw):
+                self.__row = row
+                self.__col = col
+                super().__init__(*args, **kw)
+
+            def _feed_cell_manager(self, cell_manager):
+                self.__cell_manager = cell_manager
+
+            @property
+            def coordinates(self):
+                return self.__row, self.__col
+
+            def config(self, **options):
+                for key, value in options.items():
+                    self.__setattr__(key, value)
+
+            def on_touch_down(self, touch):
+                return self.__cell_manager.on_touch_down(touch)
+
+        class _Cell(object):
+            def __init__(self, row, col):
+                self.row = row
+                self.col = col
+
+                self.__options = {}
+                self.__init_options()
+
+                self.__formula = ''
+
+                self.__mode = 'computed'
+
+                self.__computed = str(row*2**5+col)
+
+            def __init_options(self):
+                pass
+
+            @property
+            def coordinates(self):
+                return (self.row, self.col)
+
+            @property
+            def index(self):
+                return utils.get_cell_index(self.row, self.col)
+            
+            def config(self, **options):
+                self.__options.update(options)
+                print(self.__options)
+                return self.__options
+            
+            @property
+            def formula(self):
+                return self.__formula_value
+
+            @formula.setter
+            def formula(self, value):
+                self.__formula = value
+
+            @property
+            def mode(self):
+                return self.__mode
+
+            @mode.setter
+            def mode(self, value):
+                self.__mode = value
+
+            @property
+            def display(self):
+                return self.formula if self.mode == 'formula' else self.computed
+
+            @property
+            def computed(self):
+                return self.__computed
+
         def __init__(self, cells=None, texts=None, row=0, col=0):
             self.__cells = cells
             self.__texts = texts
@@ -101,76 +100,69 @@ class Spreadsheet(Widget):
 
             self.__update_display()
 
+        def __cell_to_text(self, cell):
+            text_row, text_col = tuple(map(operator.sub, cell.coordinates, self.ul))
+            return self.__texts[text_row][text_col]
+
+        def __text_to_cell(self, text):
+            cell_row, cell_col = tuple(map(operator.add, text.coordinates, self.ul))
+            return self.__cells[cell_row][cell_col]
+
         def on_touch_down(self, touch):
-            [print(('!' if text.collide_point(*touch.pos) else '_'), end=',') for text in utils.flatten(self.__texts)]
-            print('\n\n\n')
+            if touch.button == 'left':
+                text = [self.__texts[row][col] for row in range(len(self.__texts)) for col in range(len(self.__texts[0])) if self.__texts[row][col].collide_point(*touch.pos)][0]
+                self.select_cell(self.__text_to_cell(text), anchor=True, exclusive=True)
             return True
 
         def select_all_cells(self, event):
             print('Selecting all cells in the grid!')
-            self.__select_range(exclusive=True, anchor='A1', reel=(-1, -1))
-            return 'break'
+            self.select_range(exclusive=True, anchor='A1', reel=(-1, -1))
 
         def select_cells(self, cells, exclusive=False, flip=False):
             if exclusive:
-                self.__deselect_all_cells()
+                self.deselect_all_cells()
             
-            [self.__select_cell(cell, exclusive=False, flip=flip) for cell in cells]
+            [self.select_cell(cell, exclusive=False, flip=flip) for cell in cells]
 
-        def select_cell(self, cell, anchor=False, exclusive=False, flip=False):
+        def select_cell(self, cell, anchor=False, exclusive=False):
             if exclusive:
-                self.__deselect_all_cells()          
+                self.deselect_all_cells()          
 
-            if cell in self.__selected_cells:
-                if flip:
-                    print('flip')
-                    self.__deselect_cell(cell)
-                else:
-                    if anchor:
-                        self.__set_anchor(cell)
-                    return
-            elif anchor:
-                self.__set_anchor(cell)
+            if anchor:
+                self.__select_anchor_cell(cell)
                 self.__selected_cells.append(cell)
             else:
-                cell.config(highlightbackground = 'selected')
+                cell.config(background_color = [0, 1, 0, 0.5])
                 self.__selected_cells.append(cell)
-
-            self.god_entry.focus_set()
-
 
         def deselect_all_cells(self, but=[]):
             print('deselect all')
 
-            self.__deselect_cells([cell for cell in self.__selected_cells if cell not in but])
+            self.deselect_cells([cell for cell in self.__selected_cells if cell not in but])
 
         def deselect_cells(self, cells):
-            [self.__deselect_cell(cell) for cell in cells]
+            [self.deselect_cell(cell) for cell in cells]
 
         def deselect_cell(self, cell):
             try:
                 self.__selected_cells.remove(cell)
-                cell.config(highlightbackground = 'ghost white')
+                cell.config(background_color = [1, 1, 1, 0.5])
                 if cell == self.__anchor_cell:
                     print('Anchor')
                     anchor = self.__selected_cells[-1] if self.__selected_cells else None
-                    self.__set_anchor(anchor)
+                    self.__select_anchor_cell(anchor)
             except ValueError:
                 pass
-
-            if not self.__selected_cells:
-                print('no selected cells')
-                self.containing_frame.focus_set()
 
         def select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
             #print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
 
             if exclusive:
                 but = [self.__anchor_cell] if keepanchor else []
-                self.__deselect_all_cells(but=but)
+                self.deselect_all_cells(but=but)
 
             if anchor:
-                self.__set_anchor(anchor, add=True)
+                self.__select_anchor_cell(anchor, add=True)
 
             if reel:
                 self.__set_reel_cell(reel)
@@ -194,22 +186,22 @@ class Spreadsheet(Widget):
             if row_range[-1] > prev_row_range[-1]:
                 print('The row minimum increased')
                 for row in range(prev_row_range[-1], row_range[-1]):
-                    self.__deselect_cells([self.__cells[row][column] for column in prev_column_range])
+                    self.deselect_cells([self.__cells[row][column] for column in prev_column_range])
 
             elif row_range[0] < prev_row_range[0]:
                 print('The row maximum decreased')
                 for row in range(prev_row_range[0], row_range[0], -1):
-                    self.__deselect_cells([self.__cells[row][column] for column in prev_column_range])
+                    self.deselect_cells([self.__cells[row][column] for column in prev_column_range])
 
             if row_range[-1] < prev_row_range[-1]:
                 print('The row minimum decreased')
                 for row in range(row_range[-1], prev_row_range[-1]):
-                    self.__select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
+                    self.select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
 
             elif row_range[0] > prev_row_range[0]:
                 print('The row maximum increased')
                 for row in range(row_range[0], prev_row_range[0], -1):
-                    self.__select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
+                    self.select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
 
             
 
@@ -217,57 +209,36 @@ class Spreadsheet(Widget):
             if column_range[-1] > prev_column_range[-1]:
                 print('The column minimum increased')
                 for column in range(prev_column_range[-1], column_range[-1]):
-                    self.__deselect_cells([self.__cells[row][column] for row in row_range])
+                    self.deselect_cells([self.__cells[row][column] for row in row_range])
 
             elif column_range[0] < prev_column_range[0]:
                 print('The column maximum decreased')
                 for column in range(prev_column_range[0], column_range[0], -1):
-                    self.__deselect_cells([self.__cells[row][column] for row in row_range])
+                    self.deselect_cells([self.__cells[row][column] for row in row_range])
 
 
             if column_range[-1] < prev_column_range[-1]:
                 print('The column minimum decreased')
                 for column in range(column_range[-1], prev_column_range[-1]):
-                    self.__select_cells([self.__cells[row][column] for row in row_range], flip=flip)
+                    self.select_cells([self.__cells[row][column] for row in row_range], flip=flip)
 
             elif column_range[0] > prev_column_range[0]:
                 print('The column maximum increased')
                 for column in range(column_range[0], prev_column_range[0], -1):
-                    self.__select_cells([self.__cells[row][column] for row in row_range], flip=flip)
+                    self.select_cells([self.__cells[row][column] for row in row_range], flip=flip)
 
-        def __set_anchor(self, ref, col = None, add = False, flip=False):        
-            if not ref and ref != 0:
-                self.__anchor_cell = None
-                return
+        def __clear_anchor_cell(self):
+            self.__anchor_cell.config(background_color = 'not_selected')
+            self.__anchor_cell = None
 
-            if type(ref) != self._Cell:
-                row, column = utils.normalize_cell_notation(ref, col)
-                ref = self.__cells[row][column]
-
-            if flip and cell in self.__selected_cells:
-                self.__deselect_cell(cell)
-                return
-
+        def __set_anchor_cell(self, cell):        
             print('Setting cell ' + repr(cell) + ' to anchor')
 
-            if self.__anchor_cell in self.__selected_cells:
-                self.__anchor_cell.config(highlightbackground = 'selected')
             self.__anchor_cell = cell
-            self.__anchor_cell.config(highlightbackground = 'anchor')
+            self.__anchor_cell.config(background_color = 'selected')
 
-            self.__set_reel_cell(cell)
-
-            if add and cell not in self.__selected_cells:
-                self.__selected_cells.append(cell)
-
-        def __set_reel_cell(self, cell, col=None):
-            if type(cell) != self._Cell:
-                row, column = utils.normalize_cell_notation(cell, col)
-                if type(row) == int and type(column) == int:
-                    cell = self.__cells[row][column]
-
+        def __set_reel_cell(self, cell):
             self.__reel_cell, self.__prev_reel_cell = cell, self.__reel_cell
-
 
         @property
         def ul(self):
@@ -300,14 +271,16 @@ class Spreadsheet(Widget):
 
         def right(self, amt=1):
             self.horizontal(amt)
-        
+
+        def __update_style(self, cell):
+            text = self.__cell_to_text(cell)
+            text.config(**cell.config)
 
         def __update_display(self):
             for text in utils.flatten(self.__texts):
-                row, col = tuple(map(operator.add, text.coordinates, self.ul))
-                cell = self.__cells[row][col]
+                cell = self.__text_to_cell(text)
                 text.text = cell.display
-                text.config(**cell.config)
+                text.config(**cell.config())
 
         def convert(self, view_coordinates):
             return tuple(map(operator.add, (self.__ulr, self.__ulc), view_coordinates))
@@ -496,6 +469,9 @@ class Spreadsheet(Widget):
 
     def __init__(self, program_paths, rows, cols, *args, **kw):
         super().__init__(*args, **kw)
+
+        self._Cell = self._CellManager._Cell
+        self._CellView = self._CellManager._CellView
 
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
         self._keyboard.bind(on_key_down=lambda idc1, keycode, idc2, modifiers: self.__on_key_press(keycode, modifiers))
