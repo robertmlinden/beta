@@ -20,6 +20,14 @@ class Spreadsheet(Widget):
                 self.__col = col
                 super().__init__(*args, **kw)
 
+                self.__conversions = {}
+                self.__init_conversions()
+
+            def __init_conversions(self):
+                self.__conversions['default'] = [1, 1, 1, 1]
+                self.__conversions['selected'] = [0, 1, 0, 1]
+                self.__conversions['anchor'] = [218/255, 165/255, 32/255, 1]
+
             def _feed_cell_manager(self, cell_manager):
                 self.__cell_manager = cell_manager
 
@@ -29,6 +37,8 @@ class Spreadsheet(Widget):
 
             def config(self, **options):
                 for key, value in options.items():
+                    if value in self.__conversions:
+                        value = self.__conversions[value]
                     self.__setattr__(key, value)
 
             def on_touch_down(self, touch):
@@ -61,7 +71,6 @@ class Spreadsheet(Widget):
             
             def config(self, **options):
                 self.__options.update(options)
-                print(self.__options)
                 return self.__options
             
             @property
@@ -111,7 +120,8 @@ class Spreadsheet(Widget):
         def on_touch_down(self, touch):
             if touch.button == 'left':
                 text = [self.__texts[row][col] for row in range(len(self.__texts)) for col in range(len(self.__texts[0])) if self.__texts[row][col].collide_point(*touch.pos)][0]
-                self.select_cell(self.__text_to_cell(text), anchor=True, exclusive=True)
+                cell = self.__text_to_cell(text)
+                self.select_cell(cell, anchor=True, exclusive=True)
             return True
 
         def select_all_cells(self, event):
@@ -126,14 +136,14 @@ class Spreadsheet(Widget):
 
         def select_cell(self, cell, anchor=False, exclusive=False):
             if exclusive:
-                self.deselect_all_cells()          
+                self.deselect_all_cells()
+
+            self.__selected_cells.append(cell)
 
             if anchor:
-                self.__select_anchor_cell(cell)
-                self.__selected_cells.append(cell)
+                self.__set_anchor_cell(cell)
             else:
-                cell.config(background_color = [0, 1, 0, 0.5])
-                self.__selected_cells.append(cell)
+                self.config(cell, background_color = 'selected')
 
         def deselect_all_cells(self, but=[]):
             print('deselect all')
@@ -146,23 +156,24 @@ class Spreadsheet(Widget):
         def deselect_cell(self, cell):
             try:
                 self.__selected_cells.remove(cell)
-                cell.config(background_color = [1, 1, 1, 0.5])
+                self.config(cell, background_color = 'default')
+
                 if cell == self.__anchor_cell:
-                    print('Anchor')
-                    anchor = self.__selected_cells[-1] if self.__selected_cells else None
-                    self.__select_anchor_cell(anchor)
+                    if self.__selected_cells:
+                        self.__set_anchor_cell(cell)
+                    else:
+                        self.__clear_anchor_cell()
+
             except ValueError:
                 pass
 
         def select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
-            #print('Selecting ' + ('exclusive' if exclusive else '') +  ' range: ', end='')
-
             if exclusive:
                 but = [self.__anchor_cell] if keepanchor else []
                 self.deselect_all_cells(but=but)
 
             if anchor:
-                self.__select_anchor_cell(anchor, add=True)
+                self.__set_anchor_cell(anchor, add=True)
 
             if reel:
                 self.__set_reel_cell(reel)
@@ -204,8 +215,6 @@ class Spreadsheet(Widget):
                     self.select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
 
             
-
-            
             if column_range[-1] > prev_column_range[-1]:
                 print('The column minimum increased')
                 for column in range(prev_column_range[-1], column_range[-1]):
@@ -228,14 +237,13 @@ class Spreadsheet(Widget):
                     self.select_cells([self.__cells[row][column] for row in row_range], flip=flip)
 
         def __clear_anchor_cell(self):
-            self.__anchor_cell.config(background_color = 'not_selected')
             self.__anchor_cell = None
 
         def __set_anchor_cell(self, cell):        
             print('Setting cell ' + repr(cell) + ' to anchor')
 
             self.__anchor_cell = cell
-            self.__anchor_cell.config(background_color = 'selected')
+            self.config(self.__anchor_cell, background_color = 'anchor')
 
         def __set_reel_cell(self, cell):
             self.__reel_cell, self.__prev_reel_cell = cell, self.__reel_cell
@@ -257,7 +265,6 @@ class Spreadsheet(Widget):
 
         def horizontal(self, amt):
             if self.__ulc + amt >= 0 and self.__ulc + amt + len(self.__texts[0]) - 1 < len(self.__cells[0]):
-                print(len(self.__cells[0]), self.__ulc)
                 self.ul = self.__ulr, self.__ulc + amt
 
         def up(self, amt = 1):
@@ -272,9 +279,13 @@ class Spreadsheet(Widget):
         def right(self, amt=1):
             self.horizontal(amt)
 
+        def config(self, cell, **options):
+            cell.config(**options)
+            self.__update_style(cell)
+
         def __update_style(self, cell):
             text = self.__cell_to_text(cell)
-            text.config(**cell.config)
+            text.config(**cell.config())
 
         def __update_display(self):
             for text in utils.flatten(self.__texts):
@@ -462,9 +473,6 @@ class Spreadsheet(Widget):
         else:
             return True
 
-        print(keycode[1])
-        print(modifiers)
-
         return True
 
     def __init__(self, program_paths, rows, cols, *args, **kw):
@@ -501,8 +509,6 @@ class Spreadsheet(Widget):
         self.__cell_manager = self._CellManager(cells = self.__cells, texts = self.__texts, row=0, col=0)
 
         [text._feed_cell_manager(self.__cell_manager) for text in utils.flatten(self.__texts)]
-
-        [print(text.coordinates) for text in utils.flatten(self.__texts)]
 
         self.__layout.add_widget(self.__cell_layout)
 
