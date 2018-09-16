@@ -44,6 +44,9 @@ class Spreadsheet(Widget):
             def on_touch_down(self, touch):
                 return self.__cell_manager.on_touch_down(touch)
 
+            def on_touch_move(self, touch):
+                return self.__cell_manager.on_touch_move(touch)
+
         class _Cell(object):
             def __init__(self, row, col):
                 self.row = row
@@ -97,6 +100,9 @@ class Spreadsheet(Widget):
             def computed(self):
                 return self.__computed
 
+            def __str__(self):
+                return utils.get_cell_index(self.row, self.col)
+
         def __init__(self, cells=None, texts=None, row=0, col=0):
             self.__cells = cells
             self.__texts = texts
@@ -124,15 +130,23 @@ class Spreadsheet(Widget):
                 self.select_cell(cell, anchor=True, exclusive=True)
             return True
 
+        def on_touch_move(self, touch):
+            if touch.button == 'left':
+                text = [self.__texts[row][col] for row in range(len(self.__texts)) for col in range(len(self.__texts[0])) if self.__texts[row][col].collide_point(*touch.pos)][0]
+                cell = self.__text_to_cell(text)
+                print(cell)
+                self.__set_reel_cell(cell)
+                self.select_range()
+
         def select_all_cells(self, event):
             print('Selecting all cells in the grid!')
             self.select_range(exclusive=True, anchor='A1', reel=(-1, -1))
 
-        def select_cells(self, cells, exclusive=False, flip=False):
+        def select_cells(self, cells, exclusive=False):
             if exclusive:
                 self.deselect_all_cells()
             
-            [self.select_cell(cell, exclusive=False, flip=flip) for cell in cells]
+            [self.select_cell(cell, exclusive=False) for cell in cells]
 
         def select_cell(self, cell, anchor=False, exclusive=False):
             if exclusive:
@@ -167,20 +181,7 @@ class Spreadsheet(Widget):
             except ValueError:
                 pass
 
-        def select_range(self, keepanchor = True, exclusive = False, flip=False, anchor = None, reel = None):
-            if exclusive:
-                but = [self.__anchor_cell] if keepanchor else []
-                self.deselect_all_cells(but=but)
-
-            if anchor:
-                self.__set_anchor_cell(anchor, add=True)
-
-            if reel:
-                self.__set_reel_cell(reel)
-            
-            prev_reel_cell = self.__anchor_cell if exclusive else self.__prev_reel_cell
-
-
+        def select_range(self):
             anchor_coordinates = (a_row, a_column) = self.__anchor_cell.coordinates
             prev_reel_coordinates = (p_row, p_column) = self.__reel_cell.coordinates
             reel_coordinates = (r_row, r_column) = self.__prev_reel_cell.coordinates
@@ -207,12 +208,12 @@ class Spreadsheet(Widget):
             if row_range[-1] < prev_row_range[-1]:
                 print('The row minimum decreased')
                 for row in range(row_range[-1], prev_row_range[-1]):
-                    self.select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
+                    self.select_cells([self.__cells[row][column] for column in prev_column_range])
 
             elif row_range[0] > prev_row_range[0]:
                 print('The row maximum increased')
                 for row in range(row_range[0], prev_row_range[0], -1):
-                    self.select_cells([self.__cells[row][column] for column in prev_column_range], flip=flip)
+                    self.select_cells([self.__cells[row][column] for column in prev_column_range])
 
             
             if column_range[-1] > prev_column_range[-1]:
@@ -229,12 +230,12 @@ class Spreadsheet(Widget):
             if column_range[-1] < prev_column_range[-1]:
                 print('The column minimum decreased')
                 for column in range(column_range[-1], prev_column_range[-1]):
-                    self.select_cells([self.__cells[row][column] for row in row_range], flip=flip)
+                    self.select_cells([self.__cells[row][column] for row in row_range])
 
             elif column_range[0] > prev_column_range[0]:
                 print('The column maximum increased')
                 for column in range(column_range[0], prev_column_range[0], -1):
-                    self.select_cells([self.__cells[row][column] for row in row_range], flip=flip)
+                    self.select_cells([self.__cells[row][column] for row in row_range])
 
         def __clear_anchor_cell(self):
             self.__anchor_cell = None
