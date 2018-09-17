@@ -293,12 +293,22 @@ class Spreadsheet(Widget):
                 self.__update_display()
 
         def vertical(self, amt):
-            if self.__ulr + amt >= 0 and self.__ulr + amt + len(self.__texts) - 1 < len(self.__cells):
-                self.ul = self.__ulr + amt, self.__ulc
+            row, col = self.__anchor_cell.coordinates
+            if row + amt >= 0 and row + amt < len(self.__cells):
+                self.select_cell(self.__cells[row + amt][col], anchor=True, exclusive=True)
+            elif row + amt >= 0:
+                self.select_cell(self.__cells[len(self.__cells) - 1][col], anchor=True, exclusive=True)
+            elif row + amt < len(self.__cells):
+                self.select_cell(self.__cells[0][col], anchor=True, exclusive=True)
 
         def horizontal(self, amt):
-            if self.__ulc + amt >= 0 and self.__ulc + amt + len(self.__texts[0]) - 1 < len(self.__cells[0]):
-                self.ul = self.__ulr, self.__ulc + amt
+            row, col = self.__anchor_cell.coordinates
+            if col + amt >= 0 and col + amt < len(self.__cells[0]):
+                self.select_cell(self.__cells[row][col + amt], anchor=True, exclusive=True)
+            elif col + amt >= 0:
+                self.select_cell(self.__cells[row][len(self.__cells[0]) - 1], anchor=True, exclusive=True)
+            elif col + amt < len(self.__cells):
+                self.select_cell(self.__cells[row][0], anchor=True, exclusive=True)
 
         def up(self, amt = 1):
             self.vertical(-1 * amt)
@@ -312,7 +322,21 @@ class Spreadsheet(Widget):
         def right(self, amt=1):
             self.horizontal(amt)
 
+        def __include_cell_in_box(self, cell):
+            row, col = cell.coordinates
+
+            if row < self.__ulr:
+                self.ul = (row, self.__ulc)
+            elif row > self.__ulr + len(self.__texts) - 1:
+                self.ul = (row - (len(self.__texts) - 1), self.__ulc)
+
+            if col < self.__ulc:
+                self.ul = (self.__ulr, col)
+            elif col > self.__ulc + len(self.__texts[0]) - 1:
+                self.ul = (self.__ulr, col - (len(self.__texts[0]) - 1))
+
         def config(self, cell, **options):
+            self.__include_cell_in_box(cell)
             cell.config(**options)
             self.__update_style(cell)
 
@@ -334,9 +358,6 @@ class Spreadsheet(Widget):
         def remove_click_modifier(self, mod):
             print('removing' + mod)
             self.__click_modifiers.remove(mod)
-
-        def __contains__(self, value):
-            return value in self.__selected_cells
 
     class elist(list):
         def shape(self, filler, wrapperlist=list):
