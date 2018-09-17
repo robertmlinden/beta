@@ -188,12 +188,8 @@ class Spreadsheet(Widget):
             [self.select_cell(cell, exclusive=False) for cell in cells]
 
         def select_cell(self, cell, anchor=False, exclusive=False):
-            print(self.__selected_cells)            
-
             if exclusive:
                 self.deselect_all_cells()
-
-            print(self.__selected_cells)
 
             self.__selected_cells.append(cell)
 
@@ -217,9 +213,7 @@ class Spreadsheet(Widget):
                 self.config(cell, background_color = 'default')
 
                 if cell == self.__anchor_cell:
-                    print('!')
                     if self.__selected_cells:
-                        print('?')
                         self.__set_anchor_cell(self.__selected_cells[-1])
                     else:
                         self.__clear_anchor_cell()
@@ -295,6 +289,7 @@ class Spreadsheet(Widget):
             self.config(self.__anchor_cell, background_color = 'anchor')
 
         def __set_reel_cell(self, cell):
+            self.__include_cell_in_box(cell)
             self.__reel_cell, self.__prev_reel_cell = cell, self.__reel_cell
 
         @property
@@ -338,6 +333,38 @@ class Spreadsheet(Widget):
         def right(self, amt=1):
             self.horizontal(amt)
 
+        def move_reel_vertical(self, amt):
+            row, col = tuple(map(operator.add, self.__reel_cell.coordinates, (amt, 0)))
+            
+            if row < 0:
+                row = 0
+            elif row >= len(self.__cells):
+                row = len(self.__cells) - 1
+
+            self.__set_reel_cell(self.__cells[row][col])
+            self.select_range(exclusive=True)
+
+        def move_reel_horizontal(self, amt):
+            row, col = tuple(map(operator.add, self.__reel_cell.coordinates, (0, amt)))
+            if col < 0:
+                col = 0
+            elif col >= len(self.__cells[0]):
+                col = len(self.__cells[0]) - 1
+            self.__set_reel_cell(self.__cells[row][col])
+            self.select_range(exclusive=True)
+
+        def shift_up(self, amt = 1):
+            self.move_reel_vertical(-1 * amt)
+            
+        def shift_down(self, amt=1):
+            self.move_reel_vertical(amt)
+
+        def shift_left(self, amt=1):
+            self.move_reel_horizontal(-1 * amt)
+
+        def shift_right(self, amt=1):
+            self.move_reel_horizontal(amt)
+
         def __include_cell_in_box(self, cell):
             row, col = cell.coordinates
 
@@ -352,9 +379,11 @@ class Spreadsheet(Widget):
                 self.ul = (self.__ulr, col - (len(self.__texts[0]) - 1))
 
         def config(self, cell, **options):
-            self.__include_cell_in_box(cell)
             cell.config(**options)
-            self.__update_style(cell)
+            try:
+                self.__update_style(cell)
+            except IndexError:
+                pass
 
         def __update_style(self, cell):
             text = self.__cell_to_text(cell)
@@ -531,22 +560,50 @@ class Spreadsheet(Widget):
 
     def __on_key_press(self, keycode, modifiers):
         if keycode[1] == 'up':
-            self.__cell_manager.up()
+            if 'shift' in modifiers:
+                self.__cell_manager.shift_up()
+            else:
+                self.__cell_manager.up()
         elif keycode[1] == 'down':
-            self.__cell_manager.down()
-        elif keycode[1] == 'right':
-            self.__cell_manager.right()
+            if 'shift' in modifiers:
+                self.__cell_manager.shift_down()
+            else:
+                self.__cell_manager.down()
+
+        if keycode[1] == 'right':
+            if 'shift' in modifiers:
+                self.__cell_manager.shift_right()
+            else:
+                self.__cell_manager.right()
         elif keycode[1] == 'left':
-            self.__cell_manager.left()
-        elif keycode[1] == 'pageup':
-            self.__cell_manager.up(self.rows)
+            if 'shift' in modifiers:
+                self.__cell_manager.shift_left()
+            else:
+                self.__cell_manager.left()
+        
+        if keycode[1] == 'pageup':
+            if 'shift' in modifiers:
+                self.__cell_manager.shift_up(self.rows)
+            else:
+                self.__cell_manager.up(self.rows)
         elif keycode[1] == 'pagedown':
-            self.__cell_manager.down(self.rows)
-        elif keycode[1] == 'home':
-            self.__cell_manager.left(self.cols)
+            if 'shift' in modifiers:
+                self.__cell_manager.shift_down(self.rows)
+            else:
+                self.__cell_manager.down(self.rows)
+
+        if keycode[1] == 'home':
+            if 'shift' in modifiers:
+                self.__cell_manager.shift_left(self.cols)
+            else:
+                self.__cell_manager.left(self.cols)
         elif keycode[1] == 'end':
-            self.__cell_manager.right(self.cols)
-        elif keycode[1] == 'lctrl' or keycode[1] == 'rctrl':
+            if 'shift' in modifiers:
+                self.__cell_manager.shift_right(self.cols)
+            else:
+                self.__cell_manager.right(self.cols)
+
+        if keycode[1] == 'lctrl' or keycode[1] == 'rctrl':
             self.__cell_manager.add_click_modifier('ctrl')
         elif keycode[1] == 'shift' or keycode[1] == 'rshift':
             self.__cell_manager.add_click_modifier('shift')
