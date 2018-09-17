@@ -126,18 +126,29 @@ class Spreadsheet(Widget):
             return self.__cells[cell_row][cell_col]
 
         def __on_cell_click(self, cell):
+            print('click')
             self.select_cell(cell, anchor=True, exclusive=True)
 
         def __on_cell_control_click(self, cell):
-            self.select_cell(cell, anchor=True, exclusive=False)
+            print('control click')
+            if cell in self.__selected_cells:
+                self.deselect_cell(cell)
+            else:
+                self.select_cell(cell, anchor=True, exclusive=False)
+
+        def __on_cell_shift_click(self, cell):
+            print('shift click ' + str(cell))
+            self.__set_reel_cell(cell)
+            self.select_range(exclusive=True)
 
         def on_touch_down(self, touch):
             if touch.button == 'left':
                 text = [self.__texts[row][col] for row in range(len(self.__texts)) for col in range(len(self.__texts[0])) if self.__texts[row][col].collide_point(*touch.pos)][0]
                 cell = self.__text_to_cell(text)
-                print(self.__click_modifiers)
                 if 'ctrl' in self.__click_modifiers:
                     self.__on_cell_control_click(cell)
+                elif 'shift' in self.__click_modifiers:
+                    self.__on_cell_shift_click(cell)
                 else:
                     self.__on_cell_click(cell)
             return True
@@ -146,13 +157,15 @@ class Spreadsheet(Widget):
             if touch.button == 'left':
                 text = [self.__texts[row][col] for row in range(len(self.__texts)) for col in range(len(self.__texts[0])) if self.__texts[row][col].collide_point(*touch.pos)][0]
                 cell = self.__text_to_cell(text)
-                print(cell)
                 self.__set_reel_cell(cell)
                 self.select_range()
 
         def select_all_cells(self, event):
             print('Selecting all cells in the grid!')
-            self.select_range(exclusive=True, anchor='A1', reel=(-1, -1))
+
+            self.__set_anchor_cell(self.__cells[0][0])
+            self.__set_reel_cell(self.__cells[-1][-1])
+            self.select_range(exclusive=True)
 
         def select_cells(self, cells, exclusive=False):
             if exclusive:
@@ -161,14 +174,19 @@ class Spreadsheet(Widget):
             [self.select_cell(cell, exclusive=False) for cell in cells]
 
         def select_cell(self, cell, anchor=False, exclusive=False):
+            print(self.__selected_cells)            
+
             if exclusive:
                 self.deselect_all_cells()
+
+            print(self.__selected_cells)
 
             self.__selected_cells.append(cell)
 
             if anchor:
                 self.__set_anchor_cell(cell)
             else:
+                print('config')
                 self.config(cell, background_color = 'selected')
 
         def deselect_all_cells(self, but=[]):
@@ -185,22 +203,21 @@ class Spreadsheet(Widget):
                 self.config(cell, background_color = 'default')
 
                 if cell == self.__anchor_cell:
+                    print('!')
                     if self.__selected_cells:
-                        self.__set_anchor_cell(cell)
+                        print('?')
+                        self.__set_anchor_cell(self.__selected_cells[-1])
                     else:
                         self.__clear_anchor_cell()
 
             except ValueError:
                 pass
 
-        def select_range(self):
+        def select_range(self, exclusive=False):
             anchor_coordinates = (a_row, a_column) = self.__anchor_cell.coordinates
-            prev_reel_coordinates = (p_row, p_column) = self.__reel_cell.coordinates
-            reel_coordinates = (r_row, r_column) = self.__prev_reel_cell.coordinates
+            prev_reel_coordinates = (p_row, p_column) = self.__prev_reel_cell.coordinates
+            reel_coordinates = (r_row, r_column) = self.__reel_cell.coordinates
 
-            print(anchor_coordinates, prev_reel_coordinates, reel_coordinates)
-
-        
             row_range = utils.closed_range(a_row, r_row)[::-1]
             if self.__prev_reel_cell:
                 prev_row_range = utils.closed_range(a_row, p_row)[::-1]
@@ -255,8 +272,9 @@ class Spreadsheet(Widget):
             self.__anchor_cell = None
 
         def __set_anchor_cell(self, cell):        
-            print('Setting cell ' + repr(cell) + ' to anchor')
+            print('Setting cell ' + str(cell) + ' to anchor')
 
+            self.__set_reel_cell(cell)
             self.__anchor_cell = cell
             self.config(self.__anchor_cell, background_color = 'anchor')
 
@@ -295,7 +313,6 @@ class Spreadsheet(Widget):
             self.horizontal(amt)
 
         def config(self, cell, **options):
-            print(options)
             cell.config(**options)
             self.__update_style(cell)
 
@@ -492,15 +509,19 @@ class Spreadsheet(Widget):
             self.__cell_manager.left(self.cols)
         elif keycode[1] == 'end':
             self.__cell_manager.right(self.cols)
-
-        if keycode[1] == 'lctrl' or keycode[1] == 'rctrl':
+        elif keycode[1] == 'lctrl' or keycode[1] == 'rctrl':
             self.__cell_manager.add_click_modifier('ctrl')
+        elif keycode[1] == 'shift' or keycode[1] == 'rshift':
+            self.__cell_manager.add_click_modifier('shift')
+
 
         return True
 
     def __on_key_release(self, keycode):
         if keycode[1] == 'lctrl' or keycode[1] == 'rctrl':
             self.__cell_manager.remove_click_modifier('ctrl')
+        elif keycode[1] == 'shift' or keycode[1] == 'rshift':
+            self.__cell_manager.remove_click_modifier('shift')
 
     def __init__(self, program_paths, rows, cols, *args, **kw):
         super().__init__(*args, **kw)
