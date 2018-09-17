@@ -113,6 +113,8 @@ class Spreadsheet(Widget):
             self.__reel_cell = self.__anchor_cell
             self.__prev_reel_cell = None
 
+            self.__click_modifiers = []
+
             self.__update_display()
 
         def __cell_to_text(self, cell):
@@ -124,6 +126,7 @@ class Spreadsheet(Widget):
             return self.__cells[cell_row][cell_col]
 
         def on_touch_down(self, touch):
+            print(touch.__dict__)
             if touch.button == 'left':
                 text = [self.__texts[row][col] for row in range(len(self.__texts)) for col in range(len(self.__texts[0])) if self.__texts[row][col].collide_point(*touch.pos)][0]
                 cell = self.__text_to_cell(text)
@@ -185,6 +188,8 @@ class Spreadsheet(Widget):
             anchor_coordinates = (a_row, a_column) = self.__anchor_cell.coordinates
             prev_reel_coordinates = (p_row, p_column) = self.__reel_cell.coordinates
             reel_coordinates = (r_row, r_column) = self.__prev_reel_cell.coordinates
+
+            print(anchor_coordinates, prev_reel_coordinates, reel_coordinates)
 
         
             row_range = utils.closed_range(a_row, r_row)[::-1]
@@ -294,8 +299,11 @@ class Spreadsheet(Widget):
                 text.text = cell.display
                 text.config(**cell.config())
 
-        def convert(self, view_coordinates):
-            return tuple(map(operator.add, (self.__ulr, self.__ulc), view_coordinates))
+        def add_click_modifier(self, mod):
+            self.__click_modifiers.append(mod)
+
+        def remove_click_modifier(self, mod):
+            self.__click_modifiers.remove(mod)
 
         def __contains__(self, value):
             return value in self.__selected_cells
@@ -471,10 +479,15 @@ class Spreadsheet(Widget):
             self.__cell_manager.left(self.cols)
         elif keycode[1] == 'end':
             self.__cell_manager.right(self.cols)
-        else:
-            return True
+
+        if keycode[1] == 'ctrl':
+            self.__cell_manager.add_click_modifier(keycode[1])
 
         return True
+
+    def __on_key_release(self, keycode):
+        if keycode[1] == 'ctrl':
+            self.__cell_manager.remove_click_modifier(keycode[1])
 
     def __init__(self, program_paths, rows, cols, *args, **kw):
         super().__init__(*args, **kw)
@@ -483,7 +496,8 @@ class Spreadsheet(Widget):
         self._CellView = self._CellManager._CellView
 
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
-        self._keyboard.bind(on_key_down=lambda idc1, keycode, idc2, modifiers: self.__on_key_press(keycode, modifiers))
+        self._keyboard.bind(on_key_down=lambda idc1, keycode, idc2, modifiers: self.__on_key_press(keycode, modifiers),
+                            on_key_down=lambda idc1, keycode, idc2: self.__on_key_release(keycode))
 
         self.program_paths = program_paths
 
