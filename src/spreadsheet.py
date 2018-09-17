@@ -125,32 +125,46 @@ class Spreadsheet(Widget):
             cell_row, cell_col = tuple(map(operator.add, text.coordinates, self.ul))
             return self.__cells[cell_row][cell_col]
 
-        def __on_cell_click(self, cell):
+        def click_cell(self, cell = None):
             print('click')
-            self.select_cell(cell, anchor=True, exclusive=True)
+            if not cell:
+                cell = self.__anchor_cell
 
-        def __on_cell_control_click(self, cell):
+            if [cell] == self.__selected_cells:
+                # Make editable and set focus
+                pass
+            else:
+                self.select_cell(cell, anchor=True, exclusive=True)
+
+        def control_click_cell(self, cell):
             print('control click')
             if cell in self.__selected_cells:
                 self.deselect_cell(cell)
             else:
                 self.select_cell(cell, anchor=True, exclusive=False)
 
-        def __on_cell_shift_click(self, cell):
+        def shift_click_cell(self, cell):
             print('shift click ' + str(cell))
             self.__set_reel_cell(cell)
             self.select_range(exclusive=True)
+
+        def control_shift_click_cell(self, cell):
+            print('Control shift click ' + str(cell))
+            self.__set_reel_cell(cell)
+            self.select_range(exclusive=False)
 
         def on_touch_down(self, touch):
             if touch.button == 'left':
                 text = [self.__texts[row][col] for row in range(len(self.__texts)) for col in range(len(self.__texts[0])) if self.__texts[row][col].collide_point(*touch.pos)][0]
                 cell = self.__text_to_cell(text)
-                if 'ctrl' in self.__click_modifiers:
-                    self.__on_cell_control_click(cell)
+                if 'ctrl' and 'shift' in self.__click_modifiers:
+                    self.control_shift_click_cell(cell)
+                elif 'ctrl' in self.__click_modifiers:
+                    self.control_click_cell(cell)
                 elif 'shift' in self.__click_modifiers:
-                    self.__on_cell_shift_click(cell)
+                    self.shift_click_cell(cell)
                 else:
-                    self.__on_cell_click(cell)
+                    self.click_cell(cell)
             return True
 
         def on_touch_move(self, touch):
@@ -274,6 +288,8 @@ class Spreadsheet(Widget):
         def __set_anchor_cell(self, cell):        
             print('Setting cell ' + str(cell) + ' to anchor')
 
+            if self.__anchor_cell and self.__anchor_cell in self.__selected_cells:
+                self.config(self.__anchor_cell, background_color = 'selected')
             self.__set_reel_cell(cell)
             self.__anchor_cell = cell
             self.config(self.__anchor_cell, background_color = 'anchor')
@@ -534,7 +550,8 @@ class Spreadsheet(Widget):
             self.__cell_manager.add_click_modifier('ctrl')
         elif keycode[1] == 'shift' or keycode[1] == 'rshift':
             self.__cell_manager.add_click_modifier('shift')
-
+        elif keycode[1] == 'enter':
+            self.__cell_manager.click_cell()
 
         return True
 
